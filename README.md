@@ -124,3 +124,21 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## PostgreSQL storage
+
+Callbacks are stored in PostgreSQL when `DATABASE_URL` is set:
+
+- `airtel_payments`: one row per transaction reference (current/final status). A SUCCESS/FAILED payment is never overwritten; a PENDING one is moved forward by later callbacks.
+- `airtel_callbacks`: append-only audit log of every callback, with `duplicate = true` for retries.
+
+Every callback is also appended to the JSONL log (`AIRTEL_CALLBACK_LOG`, `off` to disable). If the database is unreachable the callback is still acknowledged with 200 and kept in the JSONL log only (logged as an error), so no payment notification is lost.
+
+```bash
+# create the database and user once (as postgres)
+#   CREATE USER uipe_airtel WITH PASSWORD '...';  CREATE DATABASE uipe_airtel OWNER uipe_airtel;
+export DATABASE_URL=postgresql://uipe_airtel:...@localhost:5432/uipe_airtel
+npm run db:migrate          # applies migrations/*.sql once each (safe to re-run)
+```
+
+Integration test: `TEST_DATABASE_URL=<migrated db> npm run test:e2e`.

@@ -23,16 +23,11 @@ export class AirtelCallbackService {
   async process(body: AirtelCallbackBody, sourceIp: string): Promise<void> {
     const { id, status_code, airtel_money_id, message } = body.transaction;
 
-    // Idempotency: Airtel may retry; ignore repeats once finalised.
-    if (this.store.isFinalised(id)) {
-      this.logger.warn(`Duplicate callback ignored for ${id}`);
-      return;
-    }
-
     // TODO: confirm with Airtel's transaction-enquiry API before trusting the body.
     const status = AirtelCallbackService.mapStatus(status_code);
 
-    await this.store.save({
+    // Idempotency: Airtel may retry; the store ignores repeats once a payment is finalised.
+    const result = await this.store.save({
       receivedAt: new Date().toISOString(),
       sourceIp,
       reference: id,
@@ -42,6 +37,11 @@ export class AirtelCallbackService {
       message,
       raw: body,
     });
+
+    if (result === 'duplicate') {
+      this.logger.warn(`Duplicate callback ignored for ${id}`);
+      return;
+    }
 
     // TODO: on SUCCESS -> mark membership/payment paid, issue receipt, etc.
     this.logger.log(`Airtel ${id} -> ${status} (${airtel_money_id ?? 'n/a'})`);
